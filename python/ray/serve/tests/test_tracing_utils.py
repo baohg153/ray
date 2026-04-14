@@ -59,10 +59,10 @@ except ImportError:
 CUSTOM_EXPORTER_OUTPUT_FILENAME = "spans.txt"
 
 
-pytestmark = pytest.mark.skipif(
-    sys.platform == "win32",
-    reason="Tracing is not supported on Windows.",
-)
+# pytestmark = pytest.mark.skipif(
+#     sys.platform == "win32",
+#     reason="Tracing is not supported on Windows.",
+# )
 
 
 @pytest.fixture
@@ -71,8 +71,8 @@ def use_custom_tracing_exporter():
 
     # Clean up output file produced by custom exporter
     if os.path.exists(CUSTOM_EXPORTER_OUTPUT_FILENAME):
-        os.remove(CUSTOM_EXPORTER_OUTPUT_FILENAME)
-
+        # os.remove(CUSTOM_EXPORTER_OUTPUT_FILENAME)
+        safe_remove_windows(CUSTOM_EXPORTER_OUTPUT_FILENAME)
 
 @pytest.fixture
 def serve_and_ray_shutdown():
@@ -198,6 +198,19 @@ def test_default_tracing_exporter(ray_start_cluster):
     for span_processor in span_processors:
         assert isinstance(span_processor, SimpleSpanProcessor)
 
+# ========== ADJUSTED ==========
+import time
+import os
+
+def safe_remove_windows(file_path, retries=10, delay=0.2):
+    for i in range(retries):
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            return
+        except PermissionError:
+            time.sleep(delay)
+# ==============================
 
 def test_custom_tracing_exporter(use_custom_tracing_exporter):
     """Test setup_tracing with a custom tracing exporter."""
@@ -449,6 +462,22 @@ def test_tracing_e2e(
     spans_dir = os.path.join(serve_logs_dir, "spans")
 
     files = os.listdir(spans_dir)
+    
+    # # ========== ADJUSTED ==========
+    # import time
+    # serve_logs_dir = get_serve_logs_dir()
+    # spans_dir = os.path.join(serve_logs_dir, "spans")
+
+    # files = []
+    # expected_count = 2 if RAY_SERVE_ENABLE_HA_PROXY else 3
+    
+    # for _ in range(100):
+    #     if os.path.exists(spans_dir):
+    #         files = os.listdir(spans_dir)
+    #         if len(files) >= expected_count:
+    #             break
+    #     time.sleep(0.1)
+    # # ==============================
 
     if RAY_SERVE_ENABLE_HA_PROXY:
         # We don't currently trace HAProxy.
@@ -649,7 +678,27 @@ def test_tracing_e2e_with_errors(
     serve_logs_dir = get_serve_logs_dir()
     spans_dir = os.path.join(serve_logs_dir, "spans")
 
-    files = os.listdir(spans_dir)
+    # files = os.listdir(spans_dir)
+    
+    # ========== ADJUSTED ==========
+    import time
+    max_retries = 50
+    found = False
+    for _ in range(max_retries):
+        if os.path.exists(spans_dir):
+            files = os.listdir(spans_dir)
+            if len(files) > 0:
+                found = True
+                break
+        time.sleep(0.1)
+
+    if not found:
+        # Nếu vẫn không thấy sau 5s, cung cấp thông tin debug thay vì crash ngang
+        raise FileNotFoundError(
+            f"Timeout waiting for spans directory or files at {spans_dir}. "
+            "Ensure OpenTelemetry is exporting traces correctly on Windows."
+        )
+    # ==============================
 
     if RAY_SERVE_ENABLE_HA_PROXY:
         # We don't currently trace HAProxy.
