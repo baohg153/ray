@@ -57,6 +57,7 @@ except ImportError:
     )
 
 CUSTOM_EXPORTER_OUTPUT_FILENAME = "spans.txt"
+os.environ["RAY_SERVE_TRACING_EXPORTER_IMPORT_PATH"] = DEFAULT_TRACING_EXPORTER_IMPORT_PATH
 
 
 # pytestmark = pytest.mark.skipif(
@@ -202,14 +203,29 @@ def test_default_tracing_exporter(ray_start_cluster):
 import time
 import os
 
-def safe_remove_windows(file_path, retries=10, delay=0.2):
+def safe_remove_windows(path, retries=10, delay=0.2):
+    
+    if not os.path.exists(path):
+        return
+    
     for i in range(retries):
         try:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-            return
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+            else:
+                os.remove(path)
+            return 
+            
         except PermissionError:
             time.sleep(delay)
+            
+    # for i in range(retries):
+    #     try:
+    #         if os.path.exists(path):
+    #             os.remove(path)
+    #         return
+    #     except PermissionError:
+    #         time.sleep(delay)
 # ==============================
 
 def test_custom_tracing_exporter(use_custom_tracing_exporter):
@@ -379,7 +395,8 @@ def test_tracing_e2e(
             component_name="upstream_app",
             component_id="345",
             tracing_sampling_ratio=1.0,
-        )
+            tracing_exporter_import_path=DEFAULT_TRACING_EXPORTER_IMPORT_PATH,
+        )        
         tracer = trace.get_tracer("test_tracing")
         with tracer.start_as_current_span("upstream_app"):
             ctx = get_trace_context()
@@ -400,6 +417,7 @@ def test_tracing_e2e(
             component_name="upstream_app",
             component_id="345",
             tracing_sampling_ratio=1.0,
+            tracing_exporter_import_path=DEFAULT_TRACING_EXPORTER_IMPORT_PATH,
         )
         tracer = trace.get_tracer("test_tracing")
         with tracer.start_as_current_span("upstream_app"):
@@ -439,7 +457,8 @@ def test_tracing_e2e(
             component_name="upstream_app",
             component_id="345",
             tracing_sampling_ratio=1.0,
-        )
+            tracing_exporter_import_path=DEFAULT_TRACING_EXPORTER_IMPORT_PATH,
+        )  
         tracer = trace.get_tracer("test_tracing")
         with tracer.start_as_current_span("upstream_app"):
             ctx = get_trace_context()
@@ -460,25 +479,8 @@ def test_tracing_e2e(
 
     serve_logs_dir = get_serve_logs_dir()
     spans_dir = os.path.join(serve_logs_dir, "spans")
-
     files = os.listdir(spans_dir)
     
-    # # ========== ADJUSTED ==========
-    # import time
-    # serve_logs_dir = get_serve_logs_dir()
-    # spans_dir = os.path.join(serve_logs_dir, "spans")
-
-    # files = []
-    # expected_count = 2 if RAY_SERVE_ENABLE_HA_PROXY else 3
-    
-    # for _ in range(100):
-    #     if os.path.exists(spans_dir):
-    #         files = os.listdir(spans_dir)
-    #         if len(files) >= expected_count:
-    #             break
-    #     time.sleep(0.1)
-    # # ==============================
-
     if RAY_SERVE_ENABLE_HA_PROXY:
         # We don't currently trace HAProxy.
         assert len(files) == 2
@@ -525,7 +527,7 @@ def test_tracing_e2e(
     assert proxy_spans == expected_proxy_spans
     assert replica_spans == expected_replica_spans
 
-    shutil.rmtree(spans_dir)
+    # shutil.rmtree(spans_dir)
 
 
 @pytest.mark.parametrize(
@@ -597,6 +599,7 @@ def test_tracing_e2e_with_errors(
             component_name="upstream_app",
             component_id="345",
             tracing_sampling_ratio=1.0,
+            tracing_exporter_import_path=DEFAULT_TRACING_EXPORTER_IMPORT_PATH,
         )
         tracer = trace.get_tracer("test_tracing")
         with tracer.start_as_current_span("upstream_app"):
@@ -621,6 +624,7 @@ def test_tracing_e2e_with_errors(
             component_name="upstream_app",
             component_id="345",
             tracing_sampling_ratio=1.0,
+            tracing_exporter_import_path=DEFAULT_TRACING_EXPORTER_IMPORT_PATH,
         )
         tracer = trace.get_tracer("test_tracing")
         with tracer.start_as_current_span("upstream_app"):
@@ -654,6 +658,7 @@ def test_tracing_e2e_with_errors(
             component_name="upstream_app",
             component_id="345",
             tracing_sampling_ratio=1.0,
+            tracing_exporter_import_path=DEFAULT_TRACING_EXPORTER_IMPORT_PATH,
         )
         tracer = trace.get_tracer("test_tracing")
         with tracer.start_as_current_span("upstream_app"):
@@ -677,28 +682,7 @@ def test_tracing_e2e_with_errors(
     # Verify the trace data
     serve_logs_dir = get_serve_logs_dir()
     spans_dir = os.path.join(serve_logs_dir, "spans")
-
-    # files = os.listdir(spans_dir)
-    
-    # ========== ADJUSTED ==========
-    import time
-    max_retries = 50
-    found = False
-    for _ in range(max_retries):
-        if os.path.exists(spans_dir):
-            files = os.listdir(spans_dir)
-            if len(files) > 0:
-                found = True
-                break
-        time.sleep(0.1)
-
-    if not found:
-        # Nếu vẫn không thấy sau 5s, cung cấp thông tin debug thay vì crash ngang
-        raise FileNotFoundError(
-            f"Timeout waiting for spans directory or files at {spans_dir}. "
-            "Ensure OpenTelemetry is exporting traces correctly on Windows."
-        )
-    # ==============================
+    files = os.listdir(spans_dir)
 
     if RAY_SERVE_ENABLE_HA_PROXY:
         # We don't currently trace HAProxy.
@@ -769,7 +753,7 @@ def test_tracing_e2e_with_errors(
         else:
             assert False, "Invalid protocol"
     # Clean up
-    shutil.rmtree(spans_dir)
+    # shutil.rmtree(spans_dir)
 
 
 def custom_tracing_exporter():
@@ -792,10 +776,14 @@ def load_spans(file_path):
     This requires special handling because ConsoleSpanExporter
     does not write proper JSON since the data is streamed.
     """
+    if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+        return []
+    
     with open(file_path, "r") as file:
         file_contents = file.read()
 
-    raw_spans = file_contents.split("}\n{")
+    # raw_spans = file_contents.split("}\n{")
+    raw_spans = re.split(r'}\s*\n\s*{', file_contents)
     spans = []
     for i, raw_span in enumerate(raw_spans):
         if len(raw_spans) > 1:
@@ -996,6 +984,7 @@ def test_batched_span_attached_to_first_request_trace():
         component_name="upstream_app",
         component_id="batching_test_upstream_multi",
         tracing_sampling_ratio=1.0,
+        tracing_exporter_import_path=DEFAULT_TRACING_EXPORTER_IMPORT_PATH,
     )
 
     tracer = trace.get_tracer("test_tracing_batching_multi")
@@ -1079,7 +1068,7 @@ def test_batched_span_attached_to_first_request_trace():
         len(batch_indices) == 2
     ), f"Expected two distinct batch indices, got {batch_indices}"
 
-    shutil.rmtree(spans_dir)
+    # shutil.rmtree(spans_dir)
 
 
 @pytest.mark.parametrize(

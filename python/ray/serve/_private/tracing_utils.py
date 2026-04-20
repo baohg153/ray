@@ -253,19 +253,6 @@ def setup_tracing(
         component_type=component_type,
         suffix="_tracing.json",
     )
-    
-    # ========== ADJUSTED ==========
-    import os
-    from ray.serve._private.logging_utils import get_serve_logs_dir
-    
-    serve_logs_dir = get_serve_logs_dir()
-    spans_dir = os.path.join(serve_logs_dir, "spans")
-    
-    os.makedirs(spans_dir, exist_ok=True)
-    
-    if not os.path.isabs(tracing_file_name):
-        tracing_file_name = os.path.join(spans_dir, tracing_file_name)
-    # ==============================
 
     span_processors = _load_span_processors(
         tracing_exporter_import_path, tracing_file_name
@@ -491,24 +478,7 @@ def _load_span_processors(
 ):
     """Load span processors from a custome tracing
     exporter function.
-    """
-    # ========== ADJUSTED ==========
-    import os
-    from ray.serve._private.logging_utils import get_serve_logs_dir
-
-    if tracing_file_name:
-        if not os.path.isabs(tracing_file_name):
-            spans_dir = os.path.join(get_serve_logs_dir(), "spans")
-            tracing_file_name = os.path.join(spans_dir, tracing_file_name)
-        else:
-            spans_dir = os.path.dirname(tracing_file_name)
-
-        if spans_dir and not os.path.exists(spans_dir):
-            os.makedirs(spans_dir, exist_ok=True)
-            
-        tracing_file_name = os.path.normpath(tracing_file_name)
-    # ==============================
-    
+    """    
     tracing_exporter_def = import_attr(tracing_exporter_import_path)
 
     if tracing_exporter_import_path == DEFAULT_TRACING_EXPORTER_IMPORT_PATH:
