@@ -72,8 +72,7 @@ def use_custom_tracing_exporter():
 
     # Clean up output file produced by custom exporter
     if os.path.exists(CUSTOM_EXPORTER_OUTPUT_FILENAME):
-        # os.remove(CUSTOM_EXPORTER_OUTPUT_FILENAME)
-        safe_remove_windows(CUSTOM_EXPORTER_OUTPUT_FILENAME)
+        safe_remove_directory(CUSTOM_EXPORTER_OUTPUT_FILENAME)
 
 @pytest.fixture
 def serve_and_ray_shutdown():
@@ -201,31 +200,27 @@ def test_default_tracing_exporter(ray_start_cluster):
 
 # ========== ADJUSTED ==========
 import time
-import os
 
-def safe_remove_windows(path, retries=10, delay=0.2):
+def safe_remove_directory(path, retries=5, delay=0.5):
+    """Safely removes a file or directory, handling Windows file locking by using a retry method."""
     
-    if not os.path.exists(path):
+    # Check whether the os is Windows or not
+    if sys.platform != "win32":
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+        else:
+            os.remove(path)
         return
-    
+
     for i in range(retries):
         try:
             if os.path.isdir(path):
                 shutil.rmtree(path)
             else:
                 os.remove(path)
-            return 
-            
+            return
         except PermissionError:
             time.sleep(delay)
-            
-    # for i in range(retries):
-    #     try:
-    #         if os.path.exists(path):
-    #             os.remove(path)
-    #         return
-    #     except PermissionError:
-    #         time.sleep(delay)
 # ==============================
 
 def test_custom_tracing_exporter(use_custom_tracing_exporter):
@@ -527,8 +522,7 @@ def test_tracing_e2e(
     assert proxy_spans == expected_proxy_spans
     assert replica_spans == expected_replica_spans
 
-    # shutil.rmtree(spans_dir)
-
+    safe_remove_directory(spans_dir)
 
 @pytest.mark.parametrize(
     "protocol,expected_status_code,expected_span_status",
@@ -753,7 +747,7 @@ def test_tracing_e2e_with_errors(
         else:
             assert False, "Invalid protocol"
     # Clean up
-    # shutil.rmtree(spans_dir)
+    safe_remove_directory(spans_dir)
 
 
 def custom_tracing_exporter():
@@ -1068,7 +1062,7 @@ def test_batched_span_attached_to_first_request_trace():
         len(batch_indices) == 2
     ), f"Expected two distinct batch indices, got {batch_indices}"
 
-    # shutil.rmtree(spans_dir)
+    safe_remove_directory(spans_dir)
 
 
 @pytest.mark.parametrize(
@@ -1167,7 +1161,7 @@ def test_grpc_streaming_tracing_attributes(serve_and_ray_shutdown, method_name):
     assert attrs["rpc.grpc.status_code"] == "OK"
     assert grpc_proxy_span["status"]["status_code"] == "OK"
 
-    shutil.rmtree(spans_dir)
+    safe_remove_directory(spans_dir)
 
 
 if __name__ == "__main__":
