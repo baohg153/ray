@@ -317,6 +317,7 @@ def test_tracing_sampler(use_custom_tracing_exporter):
         ),
     ],
 )
+
 def test_tracing_e2e(
     serve_and_ray_shutdown,
     serve_application,
@@ -532,6 +533,8 @@ def test_tracing_e2e(
         ("grpc", grpc.StatusCode.INTERNAL.name, StatusCode.ERROR),
     ],
 )
+
+# @pytest.mark.skip(reason="Tạm thời tắt để debug test khác")
 def test_tracing_e2e_with_errors(
     serve_and_ray_shutdown, protocol, expected_status_code, expected_span_status
 ):
@@ -937,6 +940,13 @@ def test_batched_span_attached_to_first_request_trace():
     in each batch should contribute the parent trace to the 'batched_span', yielding exactly
     2 spans whose trace_ids match the traces of those first requests.
     """
+    # [FIX] Delete the spans directory of the earlier tests
+    import shutil
+    serve_logs_dir = get_serve_logs_dir()
+    spans_dir = os.path.join(serve_logs_dir, "spans")
+    if os.path.exists(spans_dir):
+        shutil.rmtree(spans_dir, ignore_errors=True)
+
 
     @serve.deployment
     class BatchedDeployment:
@@ -1021,7 +1031,7 @@ def test_batched_span_attached_to_first_request_trace():
         elif "upstream" in file:
             upstream_filename = file
     assert replica_filename and upstream_filename
-
+    
     upstream_spans = load_spans(os.path.join(spans_dir, upstream_filename))
     replica_spans = load_spans(os.path.join(spans_dir, replica_filename))
 
@@ -1064,11 +1074,11 @@ def test_batched_span_attached_to_first_request_trace():
 
     safe_remove_directory(spans_dir)
 
-
 @pytest.mark.parametrize(
     "method_name",
     ["ClientStreaming", "BidiStreaming"],
 )
+
 def test_grpc_streaming_tracing_attributes(serve_and_ray_shutdown, method_name):
     """Test that tracing attributes are correctly set for gRPC streaming requests.
 
