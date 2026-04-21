@@ -8,6 +8,7 @@ from pathlib import Path
 from threading import Thread
 from typing import Set
 from unittest.mock import patch
+import time
 
 import grpc
 import httpx
@@ -58,12 +59,6 @@ except ImportError:
 
 CUSTOM_EXPORTER_OUTPUT_FILENAME = "spans.txt"
 os.environ["RAY_SERVE_TRACING_EXPORTER_IMPORT_PATH"] = DEFAULT_TRACING_EXPORTER_IMPORT_PATH
-
-
-# pytestmark = pytest.mark.skipif(
-#     sys.platform == "win32",
-#     reason="Tracing is not supported on Windows.",
-# )
 
 
 @pytest.fixture
@@ -198,8 +193,6 @@ def test_default_tracing_exporter(ray_start_cluster):
     for span_processor in span_processors:
         assert isinstance(span_processor, SimpleSpanProcessor)
 
-# ========== ADJUSTED ==========
-import time
 
 def safe_remove_directory(path, retries=5, delay=0.5):
     """Safely removes a file or directory, handling Windows file locking by using a retry method."""
@@ -220,8 +213,9 @@ def safe_remove_directory(path, retries=5, delay=0.5):
                 os.remove(path)
             return
         except PermissionError:
+            if i == retries - 1:
+                raise
             time.sleep(delay)
-# ==============================
 
 def test_custom_tracing_exporter(use_custom_tracing_exporter):
     """Test setup_tracing with a custom tracing exporter."""
@@ -534,7 +528,6 @@ def test_tracing_e2e(
     ],
 )
 
-# @pytest.mark.skip(reason="Tạm thời tắt để debug test khác")
 def test_tracing_e2e_with_errors(
     serve_and_ray_shutdown, protocol, expected_status_code, expected_span_status
 ):
@@ -944,9 +937,7 @@ def test_batched_span_attached_to_first_request_trace():
     import shutil
     serve_logs_dir = get_serve_logs_dir()
     spans_dir = os.path.join(serve_logs_dir, "spans")
-    if os.path.exists(spans_dir):
-        shutil.rmtree(spans_dir, ignore_errors=True)
-
+    safe_remove_directory(spans_dir)
 
     @serve.deployment
     class BatchedDeployment:
